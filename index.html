@@ -222,8 +222,7 @@ const player = {
   maxXP: 100,
   level: 1,
   materials: 0,
-  upgradeCost: 7, // How many materials needed to upgrade a weapon
-
+  upgradeCost: 5, // How many materials needed to upgrade a weapon
   potions: 0,
   chaosPotions: 0,
   magicalChestBoostUsed: false,
@@ -232,6 +231,7 @@ const player = {
   trollStinkActive: false,   // 👈 NEW
   weapons: [],
   equippedWeapon: null,
+  baseAttackBonus: 0,
   x: 0,
   y: 0
 };
@@ -270,8 +270,8 @@ const enemyTypes = [
   },
   {
     name: "Orc",
-    hp: 60,
-    attack: 12,
+    hp: 55,
+    attack: 10,
     image: "https://via.placeholder.com/100x100?text=Orc"
   },
   {
@@ -283,13 +283,13 @@ const enemyTypes = [
   {
     name: "Skeleton",
     hp: 50,
-    attack: 10,
+    attack: 8,
     image: "https://via.placeholder.com/100x100?text=Skeleton"
   },
   {
     name: "Troll",
-    hp: 80,
-    attack: 15,
+    hp: 70,
+    attack: 12,
     image: "https://via.placeholder.com/100x100?text=Troll"
   }
 ];
@@ -490,14 +490,16 @@ player.weapons.forEach((weapon, index) => {
 
 
 function getPlayerAttackRange() {
-  const baseMin = 5 + player.level;
-  const baseMax = 10 + player.level * 2;
-  const bonus = player.equippedWeapon ? player.equippedWeapon.attack : 0;
+  const baseMin = 5 + player.baseAttackBonus;
+  const baseMax = 10 + player.baseAttackBonus * 2;
+  const weaponBonus = player.equippedWeapon ? player.equippedWeapon.attack : 0;
+
   return {
-    min: baseMin + Math.floor(bonus / 2),
-    max: baseMax + bonus
+    min: baseMin + Math.floor(weaponBonus / 2),
+    max: baseMax + weaponBonus
   };
 }
+
 
 
 function log(msg) {
@@ -523,6 +525,7 @@ function showEncounterBanner() {
   banner.style.animation = "fadeBanner 2s ease-out forwards";
 }
 
+//startBattle(enemyTypes.find(e => e.name === "Slime"));
 
 function startBattle(forcedEnemy = null) {
   isInBattle = true;
@@ -665,26 +668,27 @@ if (enemy.name === "Zombie" && Math.random() < 0.5) {
 }
 
 if (enemy.name === "Troll" && Math.random() < 0.3) {
-  player.trollStinkActive = true;
+  if (!player.trollStinkActive) {
+    player.trollStinkActive = true;
 
-  if (trollStinkTimer) {
-    clearTimeout(trollStinkTimer);
-  }
+    alert("🤢 The Troll’s scent clings to you! Enemies are avoiding you for 45 seconds...");
 
-  alert("🤢 The Troll’s scent clings to you! Enemies are avoiding you for 45 seconds...");
+    trollStinkTimer = setTimeout(() => {
+      player.trollStinkActive = false;
+      trollStinkTimer = null;
+      alert("💨 The stench wears off. Enemy encounters return to normal.");
+      updateUI();
+    }, 45000);
 
-  trollStinkTimer = setTimeout(() => {
-    player.trollStinkActive = false;
-    trollStinkTimer = null;
-    alert("💨 The stench wears off. Enemy encounters return to normal.");
     updateUI();
-  }, 45000);
-
-  updateUI();
+  } else {
+    log("🧄 Troll tried to reapply stink, but it’s already active.");
+  }
 }
 
 
-// 30% chance to drop a Chaos Potion from Troll
+
+// chance to drop a Chaos Potion from Troll
 if (enemy.name === "Troll" && Math.random() < 0.4) {
   player.chaosPotions = (player.chaosPotions || 0) + 1;
   alert(`🔥 The Troll dropped a Chaos Potion! It increases the chance of encountering ${player.chaosTarget || "a random enemy"}.`);
@@ -729,32 +733,38 @@ if (enemy.name === "Skeleton" && Math.random() < 0.4) {
 }
 
 
-
+// Level up check
 if (player.xp >= player.maxXP) {
+  player.xp -= player.maxXP;
   player.level++;
-  player.xp = 0;
-  player.maxXP += 50;
+  player.maxXP = Math.floor(player.maxXP * 1.2);
 
-  const choice = prompt(`🎉 Leveled up to level ${player.level}!\nChoose a bonus:\n1 = +5 Max HP\n2 = Increase Attack Damage`);
+  let choice;
+  while (choice !== "1" && choice !== "2") {
+    choice = prompt("🎉 Level up! Choose a bonus:\n1. Increase Max HP by 5\n2. Increase Attack Damage");
+  }
 
   if (choice === "1") {
     player.maxHP += 5;
     player.hp = player.maxHP;
     alert("❤️ Your max HP increased by 5!");
-  } else {
-    // Attack damage scales naturally with level, so just keep hp full
-    alert("💥 Your attack damage has increased with your level!");
+  } else if (choice === "2") {
+    player.baseAttackBonus++;
     player.hp = player.maxHP;
+    alert(`💥 Your attack damage increased!\nNew attack bonus: +${player.baseAttackBonus}`);
   }
+}
+
+
 
   updateUI();
-}
+
 
 
  const dropEligibleEnemies = ["Goblin", "Orc", "Troll"];
 
 if (dropEligibleEnemies.includes(enemy.name)) {
-  if (Math.random() < 0.3) {
+  if (Math.random() < 0.4) {
     player.potions++;
     alert(`💊 The ${enemy.name} dropped a health potion!`);
   }
@@ -836,9 +846,9 @@ function moveGhostTowardPlayer() {
   // Check for collision
   if (ghost.x === player.x && ghost.y === player.y) {
     alert("💀 The ghost catches you! You feel its cold grip...");
-    player.hp -= 10;
+    player.hp -= 4;
 
-    if (Math.random() < 0.3 && !player.hasReceivedAmulet) {
+    if (Math.random() < 0.7 && !player.hasReceivedAmulet) {
       if (player.weapons.length >= 3) {
         alert("👻 The ghost dropped an Amulet... but your inventory is full!");
       } else {
@@ -890,7 +900,7 @@ function maybeSpawnGhost() {
     } while (ghost.x === player.x && ghost.y === player.y);
 
     ghost.active = true;
-    alert("👻 A ghost has begun stalking you...");
+    alert("👻 Isolation always haunts the best of us. A ghost has begun stalking you...");
 
     ghost.timer = setInterval(moveGhostTowardPlayer, 500);
   }
@@ -988,6 +998,7 @@ placeRandomPotions();
 placeRandomChests(); // NEW
 generateMap();
 updateUI();
+alert("🧭 You've spent your entire life hiding, waiting, doing nothing. At this point, you have no choice. Go forth and see what awaits you. Use the arrow keys to explore the map, collect loot, and battle enemies.");
 
 </script>
 
